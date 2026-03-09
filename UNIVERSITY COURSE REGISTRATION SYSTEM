@@ -1,0 +1,106 @@
+CREATE TABLE departments(
+dept_id INT PRIMARY KEY,
+dept_name VARCHAR(50)
+);
+
+CREATE TABLE instructors(
+instructor_id INT PRIMARY KEY,
+instructor_name VARCHAR(50),
+dept_id INT REFERENCES departments(dept_id)
+);
+
+CREATE TABLE students(
+student_id INT PRIMARY KEY,
+student_name VARCHAR(50),
+dept_id INT REFERENCES departments(dept_id)
+);
+
+CREATE TABLE courses(
+course_id INT PRIMARY KEY,
+course_name VARCHAR(50),
+dept_id INT REFERENCES departments(dept_id),
+instructor_id INT REFERENCES instructors(instructor_id)
+);
+
+CREATE TABLE enrollments(
+enroll_id INT PRIMARY KEY,
+student_id INT REFERENCES students(student_id),
+course_id INT REFERENCES courses(course_id)
+);
+
+CREATE TABLE grades(
+grade_id INT PRIMARY KEY,
+student_id INT,
+course_id INT,
+grade INT
+);
+
+INSERT INTO departments
+SELECT id, 'Department '||id
+FROM generate_series(1,5) id;
+
+INSERT INTO instructors
+SELECT id, 'Instructor '||id, (id%5)+1
+FROM generate_series(1,12) id;
+
+INSERT INTO students
+SELECT id, 'Student '||id, (id%5)+1
+FROM generate_series(1,35) id;
+
+INSERT INTO courses
+SELECT id, 'Course '||id, (id%5)+1, (id%12)+1
+FROM generate_series(1,25) id;
+
+INSERT INTO enrollments
+SELECT id, (id%35)+1, (id%25)+1
+FROM generate_series(1,80) id;
+
+INSERT INTO grades
+SELECT id,(id%35)+1,(id%25)+1,(60+(id%40))
+FROM generate_series(1,80) id;
+
+--all students with their enrolled courses
+SELECT s.student_name,c.course_name
+FROM students s
+JOIN enrollments e ON s.student_id=e.student_id
+JOIN courses c ON e.course_id=c.course_id;
+
+--courses with no enrollments
+SELECT c.course_name
+FROM courses c
+LEFT JOIN enrollments e
+ON c.course_id=e.course_id
+WHERE e.course_id IS NULL;
+--students not registered for any course
+SELECT s.student_name
+FROM students s
+LEFT JOIN enrollments e
+ON s.student_id=e.student_id
+WHERE e.student_id IS NULL;
+--Instructors teaching multiple courses
+SELECT i.instructor_name,COUNT(c.course_id)
+FROM instructors i
+JOIN courses c
+ON i.instructor_id=c.instructor_id
+GROUP BY i.instructor_name
+HAVING COUNT(c.course_id)>1;
+--Average grade per course
+SELECT c.course_name,AVG(g.grade)
+FROM courses c
+JOIN grades g
+ON c.course_id=g.course_id
+GROUP BY c.course_name;
+--Students in Computer Science department
+SELECT s.student_name
+FROM students s
+JOIN departments d
+ON s.dept_id=d.dept_id
+WHERE d.dept_name='Department 1';
+
+
+
+
+
+
+
+
