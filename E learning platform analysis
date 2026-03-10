@@ -1,0 +1,182 @@
+--e leaarning platform analysis 
+CREATE TABLE users (
+    user_id INT PRIMARY KEY,
+    user_name VARCHAR(100),
+    email VARCHAR(100),
+    user_type VARCHAR(20),  -- free or paid
+    signup_date DATE
+);
+
+CREATE TABLE courses (
+    course_id INT PRIMARY KEY,
+    course_name VARCHAR(100),
+    category VARCHAR(50),
+    price DECIMAL(8,2),
+    prerequisite_course_id INT,
+    FOREIGN KEY (prerequisite_course_id) REFERENCES courses(course_id)
+);
+
+CREATE TABLE lessons (
+    lesson_id INT PRIMARY KEY,
+    course_id INT,
+    lesson_title VARCHAR(150),
+    duration_minutes INT,
+    FOREIGN KEY (course_id) REFERENCES courses(course_id)
+);
+
+CREATE TABLE completions (
+    completion_id INT PRIMARY KEY,
+    user_id INT,
+    course_id INT,
+    completion_date DATE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (course_id) REFERENCES courses(course_id)
+);
+
+CREATE TABLE quizzes (
+    quiz_id INT PRIMARY KEY,
+    course_id INT,
+    quiz_title VARCHAR(100),
+    total_marks INT,
+    FOREIGN KEY (course_id) REFERENCES courses(course_id)
+);
+
+CREATE TABLE quiz_attempts (
+    attempt_id INT PRIMARY KEY,
+    quiz_id INT,
+    user_id INT,
+    score INT,
+    attempt_date DATE,
+    FOREIGN KEY (quiz_id) REFERENCES quizzes(quiz_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+INSERT INTO users (user_id, user_name, email, user_type, signup_date)
+SELECT 
+    gs,
+    'User' || gs,
+    'user' || gs || '@gmail.com',
+    CASE 
+        WHEN gs % 2 = 0 THEN 'paid'
+        ELSE 'free'
+    END,
+    CURRENT_DATE - (gs || ' days')::interval
+FROM generate_series(1,10) AS gs;
+
+INSERT INTO courses (course_id, course_name, category, price, prerequisite_course_id)
+VALUES
+(101,'Python Basics','Programming',0,NULL),
+(102,'Advanced Python','Programming',500,101),
+(103,'SQL Basics','Database',0,NULL),
+(104,'Advanced SQL','Database',500,103),
+(105,'Data Analytics','Analytics',800,104);
+
+INSERT INTO lessons (lesson_id, course_id, lesson_title, duration_minutes)
+SELECT 
+    gs,
+    101 + (gs % 5),
+    'Lesson ' || gs,
+    15 + gs
+FROM generate_series(1,15) AS gs;
+
+INSERT INTO completions (completion_id, user_id, course_id, completion_date)
+SELECT 
+    gs,
+    (gs % 10) + 1,
+    101 + (gs % 5),
+    CURRENT_DATE - (gs || ' days')::interval
+FROM generate_series(1,20) AS gs;
+
+INSERT INTO quizzes (quiz_id, course_id, quiz_title, total_marks)
+SELECT
+    200 + gs,
+    101 + (gs % 5),
+    'Quiz ' || gs,
+    50
+FROM generate_series(1,5) AS gs;
+
+INSERT INTO quiz_attempts (attempt_id, quiz_id, user_id, score, attempt_date)
+SELECT
+    gs,
+    201 + (gs % 5),
+    (gs % 10) + 1,
+    30 + (gs % 20),
+    CURRENT_DATE - (gs || ' days')::interval
+FROM generate_series(1,25) AS gs;
+
+--sub-queries(users who completed more courses than query)
+SELECT user_id
+FROM completions
+GROUP BY user_id
+HAVING COUNT(course_id) >
+(
+    SELECT AVG(cnt)
+    FROM (
+        SELECT COUNT(course_id) AS cnt
+        FROM completions
+        GROUP BY user_id
+    ) AS sub
+);
+
+--cte(Calculate how many users completed each course.)
+WITH completion_counts AS (
+    SELECT 
+        course_id,
+        COUNT(user_id) AS total_completions
+    FROM completions
+    GROUP BY course_id
+)
+
+SELECT 
+    c.course_name,
+    cc.total_completions
+FROM completion_counts cc
+JOIN courses c
+ON cc.course_id = c.course_id;
+--Recursive CTE – Course Prerequisite Chain
+WITH RECURSIVE course_chain AS (
+    
+    SELECT 
+        course_id,
+        course_name,
+        prerequisite_course_id
+    FROM courses
+    WHERE prerequisite_course_id IS NULL
+
+    UNION ALL
+
+    SELECT 
+        c.course_id,
+        c.course_name,
+        c.prerequisite_course_id
+    FROM courses c
+    JOIN course_chain cc
+    ON c.prerequisite_course_id = cc.course_id
+)
+
+SELECT * FROM course_chain;
+
+--UNION – Combine Free and Paid Users
+SELECT user_name, user_type
+FROM users
+WHERE user_type = 'free'
+
+UNION
+
+SELECT user_name, user_type
+FROM users
+WHERE user_type = 'paid';
+--INTERSECT – Users who took both Python and SQL courses
+SELECT user_id
+FROM completions c
+JOIN courses co
+ON c.course_id = co.course_id
+WHERE co.course_name LIKE '%Python%'
+
+INTERSECT
+
+SELECT user_id
+FROM completions c
+JOIN courses co
+ON c.course_id = co.course_id
+WHERE co.course_name LIKE '%Sql%';
